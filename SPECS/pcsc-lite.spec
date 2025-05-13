@@ -1,6 +1,6 @@
 Name:           pcsc-lite
 Version:        1.9.4
-Release:        1%{?dist}
+Release:        2%{?dist}
 Summary:        PC/SC Lite smart card framework and applications
 
 License:        BSD
@@ -9,6 +9,9 @@ Source0:        https://pcsclite.apdu.fr/files/%{name}-%{version}.tar.bz2
 Source1:        https://pcsclite.apdu.fr/files/%{name}-%{version}.tar.bz2.asc
 Source2:	gpgkey-F5E11B9FFE911146F41D953D78A1B4DFE8F9C57E.gpg
 Patch1:		pcsc-lite-1.9.1-maxreaders.patch
+# a9c7c0886acfb6ca4cae1426a623a8cff2e9846c
+# 13e5c53eab9e48be0925f48bdc1b9eeb3c1b1a04
+Patch2:		pcsc-lite-1.9.4-disable-polkit-option.patch
 
 BuildRequires: make
 BuildRequires:  doxygen
@@ -73,6 +76,7 @@ gpgv2 --keyring %{SOURCE2} %{SOURCE1} %{SOURCE0}
 
 %setup -q
 %patch1 -p 0 -b .maxreaders
+%patch2 -p 1 -b .disable-polkit
 
 # Convert to utf-8
 for file in ChangeLog; do
@@ -155,6 +159,9 @@ fi
 
 
 %changelog
+* Fri Oct 25 2024 Jakub Jelen <jjelen@redhat.com> - 1.9.4-2
+- Backport --disable-polkit option (RHEL-34856)
+
 * Thu Nov 18 2021 Jakub Jelen <jjelen@redhat.com> - 1.9.4-1
 - Rebase to current version from Fedora (#2017828)
 - Use of upstrea polkit policy preventing unneeded prompts

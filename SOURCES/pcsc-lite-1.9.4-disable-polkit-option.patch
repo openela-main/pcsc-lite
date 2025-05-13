@@ -1,0 +1,110 @@
+From a9c7c0886acfb6ca4cae1426a623a8cff2e9846c Mon Sep 17 00:00:00 2001
+From: Tharre <tharre3@gmail.com>
+Date: Thu, 6 Apr 2023 17:59:36 +0200
+Subject: [PATCH] Add '--disable-polkit' option
+
+On systems with an encrypted root drive, systemd-cryptsetup may be used
+to handle decrypting the disk with a PKCS#11 token via pcscd. For this
+to work however, pcscd has to run in the initramfs to handle
+communications with the smartcard.
+
+To avoid having to also add polkitd to the initramfs, or alternatively
+to avoid having 2 separate versions of pcscd installed on the same
+system, add a commandline flag to disable polkit authentication for
+these cases.
+
+https://salsa.debian.org/rousseau/PCSC/-/merge_requests/4
+---
+ src/auth.c       | 6 ++++++
+ src/pcscdaemon.c | 8 ++++++++
+ 2 files changed, 14 insertions(+)
+
+diff --git a/src/auth.c b/src/auth.c
+index e0318ed6..cbcdf9c8 100644
+--- a/src/auth.c
++++ b/src/auth.c
+@@ -54,6 +54,8 @@
+ #if defined(HAVE_POLKIT) && defined(SO_PEERCRED)
+ 
+ #include <polkit/polkit.h>
++
++extern char disable_polkit;
+ 
+ /* Returns non zero when the client is authorized */
+ unsigned IsClientAuthorized(int socket, const char* action, const char* reader)
+@@ -68,6 +71,9 @@ unsigned IsClientAuthorized(int socket, const char* action, const char* reader)
+ 	GError *error = NULL;
+ 	char action_name[128];
+ 
++	if (disable_polkit)
++		return 1;
++
+ 	snprintf(action_name, sizeof(action_name), "org.debian.pcsc-lite.%s", action);
+ 
+ 	cr_len = sizeof(cr);
+diff --git a/src/pcscdaemon.c b/src/pcscdaemon.c
+index 69faf86a..4a0b4c0f 100644
+--- a/src/pcscdaemon.c
++++ b/src/pcscdaemon.c
+@@ -77,6 +77,7 @@ bool AutoExit = false;
+ char SocketActivated = FALSE;
+ static int ExitValue = EXIT_FAILURE;
+ int HPForceReaderPolling = 0;
++char disable_polkit = FALSE;
+ static int pipefd[] = {-1, -1};
+ static int signal_handler_fd[] = {-1, -1};
+ char Add_Serial_In_Name = TRUE;
+@@ -286,6 +287,7 @@ int main(int argc, char **argv)
+ 		{"auto-exit", 0, NULL, 'x'},
+ 		{"reader-name-no-serial", 0, NULL, 'S'},
+ 		{"reader-name-no-interface", 0, NULL, 'I'},
++		{"disable-polkit", 0, NULL, 1},
+ 		{NULL, 0, NULL, 0}
+ 	};
+ #endif
+@@ -331,6 +333,11 @@ int main(int argc, char **argv)
+ 					"force-reader-polling") == 0)
+ 					HPForceReaderPolling = optarg ? abs(atoi(optarg)) : 1;
+ 				break;
++			case 1:
++				if (strcmp(long_options[option_index].name,
++					"disable-polkit") == 0)
++					disable_polkit = TRUE;
++				break;
+ #endif
+ 			case 'c':
+ 				Log2(PCSC_LOG_INFO, "using new config file: %s", optarg);
+@@ -885,6 +892,7 @@ static void print_usage(char const * const progname)
+ 	printf("  -x, --auto-exit	pcscd will quit after %d seconds of inactivity\n", TIME_BEFORE_SUICIDE);
+ 	printf("  -S, --reader-name-no-serial    do not include the USB serial number in the name\n");
+ 	printf("  -I, --reader-name-no-interface do not include the USB interface name in the name\n");
++	printf("  --disable-polkit	disable polkit support\n");
+ #else
+ 	printf("  -a    log APDU commands and results\n");
+ 	printf("  -c	path to reader.conf\n");
+
+
+From 13e5c53eab9e48be0925f48bdc1b9eeb3c1b1a04 Mon Sep 17 00:00:00 2001
+From: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date: Sat, 25 Nov 2023 12:16:44 +0100
+Subject: [PATCH] pcscd.8: document --disable-polkit
+
+---
+ doc/pcscd.8.in | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/doc/pcscd.8.in b/doc/pcscd.8.in
+index b17d93b3..639a1214 100644
+--- a/doc/pcscd.8.in
++++ b/doc/pcscd.8.in
+@@ -84,6 +84,9 @@ Do not include the USB serial number in the reader name.
+ .TP
+ .BR \-I ", " \-\-reader\-name\-no\-interface
+ Do not include the USB interface name in the reader name.
++.TP
++.BR \-\-disable-polkit
++Ignore polkit rules. All accesses are allowed.
+ .SH DESCRIPTION
+ pcscd is the daemon program for pcsc-lite. It is a resource manager that
+ coordinates communications with smart card readers and smart cards and
+
